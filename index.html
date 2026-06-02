@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="page-title">Cricwin Online Book</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    
+    <script src="Config.js"></script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Arial Black', sans-serif; }
+        body { background: #0b1120; color: white; padding: 10px; min-height: 100vh; }
+        .header-top { padding: 40px 15px; background: linear-gradient(180deg, #1e293b 0%, #0b1120 100%); border-bottom: 4px solid #f39c12; border-radius: 0 0 50px 50px; text-align: center; margin-bottom: 25px; }
+        .brand-container { background: #fff; display: inline-block; padding: 8px 35px; border-radius: 60px; }
+        .brand-name-main { font-size: 32px; font-weight: 900; color: #000; text-transform: lowercase; }
+        .brand-name-sub { font-size: 14px; font-weight: 800; color: #000; text-transform: uppercase; display: block; }
+        
+        .notif-bar { background: rgba(243, 156, 18, 0.1); border: 1px solid rgba(243, 156, 18, 0.4); padding: 10px; border-radius: 50px; margin: 10px auto; max-width: 450px; display: flex; align-items: center; overflow: hidden; }
+        .notif-title { background: #f39c12; color: #000; padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .marquee-container { flex: 1; overflow: hidden; white-space: nowrap; }
+        .marquee-text { display: inline-block; animation: scroll-left 15s linear infinite; font-size: 14px; color: #f39c12; font-weight: bold; }
+        @keyframes scroll-left { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }
+
+        .nav-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; max-width: 450px; margin: 15px auto; }
+        .nav-btn { padding: 15px; border: none; border-radius: 20px; font-weight: bold; cursor: pointer; background: #1e293b; color: #94a3b8; font-size: 12px; }
+        .nav-btn.active { background: #f39c12; color: #000; box-shadow: 0 5px 15px rgba(243, 156, 18, 0.3); }
+
+        .card { background: #161d2f; padding: 25px; border-radius: 35px; border: 1px solid #2d3748; max-width: 450px; margin: 15px auto; }
+        input, select { width: 100%; padding: 16px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 18px; outline: none; }
+        .submit-btn { width: 100%; padding: 18px; border: none; border-radius: 18px; font-weight: 900; background: #f39c12; color: #000; cursor: pointer; margin-top: 10px; }
+        .copy-btn { background: #f39c12; color: #000; border: none; padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 900; cursor: pointer; }
+        
+        .bank-card { background: #1e293b; border-radius: 25px; padding: 20px; margin-top: 20px; border: 1px solid #2d3748; text-align: left; }
+        .bank-title { color: #f39c12; font-size: 18px; font-weight: 900; display: flex; align-items: center; gap: 10px; margin-bottom: 15px; text-transform: uppercase; }
+        .bank-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .bank-label { font-size: 13px; color: #fff; font-weight: 900; }
+        .bank-val { color: #fff; font-weight: normal; font-family: sans-serif; }
+
+        .hidden { display: none !important; }
+        .whatsapp-float { position: fixed; width: 60px; height: 60px; bottom: 20px; right: 20px; background-color: #25d366; color: #FFF; border-radius: 50px; text-align: center; font-size: 30px; box-shadow: 0px 5px 15px rgba(0,0,0,0.3); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 10px; float: right; font-weight: bold; }
+        .status-Pending { background: #fbbf24; color: #000; }
+        .status-Success { background: #22c55e; color: #fff; }
+        .status-Rejected { background: #ef4444; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <a href="#" id="wa-link" class="whatsapp-float" target="_blank">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="Support" style="width:35px;">
+    </a>
+
+    <div class="header-top">
+        <div class="brand-container">
+            <span class="brand-name-main" id="ui-app-name">cricwin</span>
+            <span class="brand-name-sub">online book</span>
+        </div>
+    </div>
+
+    <div class="notif-bar">
+        <span class="notif-title">UPDATE</span>
+        <div class="marquee-container"><div class="marquee-text" id="notif-text">Loading...</div></div>
+    </div>
+
+    <div id="app"></div>
+
+<script>
+    if (!firebase.apps.length) { firebase.initializeApp(AppConfig.firebaseConfig); }
+    const db = firebase.database();
+    let currentUser = localStorage.getItem('logged_user') || null;
+    let autoUploadedUrl = null;
+    let userQRUrl = null;
+    let hasPendingRequest = false;
+if (currentUser) {
+    db.ref('settings/pins/' + currentUser).on('value', snap => {
+        // Agar ID delete ho gayi hai
+        if (!snap.exists()) {
+            alert("Aapki ID delete kar di gayi hai!");
+            window.logout(); // Turant logout kar dega
+            return;
+        }
+
+        const userData = snap.val();
+        // Change #1: Pin ka naam phone ke matching ID 'user_pin' kar diya
+        const savedPin = localStorage.getItem('user_pin'); 
+
+        // Agar PIN badal gaya hai
+        const currentDbPass = (userData.password) ? userData.password : userData;
+        if (savedPin && String(currentDbPass) !== String(savedPin)) {
+            alert("Aapka Password badal gaya hai. Dobara login karein.");
+            window.logout();
+        }
+    });
+}
+
+    window.copyVal = (t) => { navigator.clipboard.writeText(t).then(() => alert("Copied!")); };
+
+    window.login = async () => {
+    const id = document.getElementById('l_id').value.trim().toLowerCase(); // Id ko small kar dega
+    const pin = document.getElementById('l_pin').value.trim();
+        if(!id || !pin) return alert("Details bharein!");
+        const snap = await db.ref(`settings/pins/${id}`).once('value');
+        if(snap.exists()) {
+            const data = snap.val();
+            const storedPass = (typeof data === 'object') ? data.password : data;
+            if(String(storedPass) === String(pin)) {
+                localStorage.setItem('logged_user', id);
+                localStorage.setItem('user_pin', pin);
+                currentUser = id;
+                render();
+            } else { alert("Invalid PIN!"); }
+        } else { alert("User ID not found!"); }
+    };
+
+    window.logout = () => { localStorage.clear(); location.reload(); };
+
+    async function checkForcePINChange() {
+        const snap = await db.ref(`settings/pins/${currentUser}`).once('value');
+        if(snap.exists() && snap.val().isNew === true) {
+            document.getElementById('app').innerHTML = `
+                <div class="card" style="border: 2px solid #f39c12;">
+                    <h2 style="color:#f39c12; text-align:center;">Security Update</h2>
+                    <p style="font-size:12px; margin-bottom:10px; text-align:center; color:#94a3b8;">Admin has assigned a temporary PIN. Change it now.</p>
+                    <input type="text" id="old_pin_input" placeholder="Enter Current (Admin) PIN">
+                    <input type="text" id="new_pin_input" placeholder="Enter New PIN (7-20 chars)" minlength="7" maxlength="20">
+                    <p style="font-size:10px; color:#f39c12; text-align:center;">Use Mix: A, a, 1, @ (Min: 7, Max: 20)</p>
+                    <button class="submit-btn" onclick="updateAndLogout()">VERIFY & UPDATE</button>
+                </div>`;
+            return true;
+        }
+        return false;
+    }
+
+    window.updateAndLogout = async () => {
+        const oldPin = document.getElementById('old_pin_input').value.trim();
+        const newPin = document.getElementById('new_pin_input').value.trim();
+        
+        const snap = await db.ref(`settings/pins/${currentUser}`).once('value');
+        const storedPass = (typeof snap.val() === 'object') ? snap.val().password : snap.val();
+
+        if(String(oldPin) !== String(storedPass)) return alert("wrong Pin!");
+        if(newPin.length < 7 || newPin.length > 20) return alert("PIN 7 se 20 characters ka hona chahiye!");
+        
+        await db.ref(`settings/pins/${currentUser}`).set({ password: newPin, isNew: false });
+        alert("Security PIN Changed! Please Login with new PIN.");
+        logout();
+    };
+
+    async function render() {
+        const app = document.getElementById('app');
+        if (!currentUser) {
+            app.innerHTML = `<div class="card"><h2 style="text-align:center; color:#f39c12; margin-bottom:20px;">Member Login</h2><input type="text" id="l_id" placeholder="User ID"><input type="text" id="l_pin" placeholder="Security PIN"><button class="submit-btn" onclick="login()">LOGIN</button></div>`;
+            return;
+        }
+
+        const forceChange = await checkForcePINChange();
+        if(forceChange) return;
+
+        app.innerHTML = `
+            <div style="max-width:450px; margin:auto; display:flex; justify-content:space-between; padding:0 10px 10px;">
+                <span style="font-size:13px;">User: <b style="color:#f39c12;">${currentUser}</b></span>
+                <button onclick="logout()" style="background:#ef4444; border:none; color:white; padding:4px 10px; border-radius:8px; font-size:10px;">LOGOUT</button>
+            </div>
+            <div class="nav-grid">
+                <button id="btn-depo" class="nav-btn active" onclick="switchTab('depo')">Deposit</button>
+                <button id="btn-with" class="nav-btn" onclick="switchTab('with')">Withdraw</button>
+                <button id="btn-hist" class="nav-btn" onclick="switchTab('hist')">History</button>
+            </div>
+
+            <div id="sec-depo" class="card">
+                <div id="depo-display-area" style="text-align:center;">QR Loading...</div>
+                <input type="number" id="d_amt" placeholder="Amount (Min ₹100)">
+                <div style="border: 2px dashed #334155; border-radius: 18px; padding: 20px; text-align: center; position: relative; background: rgba(15, 23, 42, 0.5);">
+                    <span id="file-label" style="color:#94a3b8; font-weight:bold;">Upload Screenshot</span>
+                    <input type="file" style="position:absolute; width:100%; height:100%; top:0; left:0; opacity:0; cursor:pointer;" onchange="fastUpload(this)">
+                </div>
+                <button class="submit-btn" onclick="processDeposit()">SUBMIT DEPOSIT</button>
+            </div>
+
+            <div id="sec-with" class="card hidden">
+                <h3 style="color:#f39c12;">Withdraw Funds</h3>
+                <input type="number" id="w_amt" placeholder="Enter Amount">
+                <div id="saved-details-box" style="background:#0f172a; padding:15px; border-radius:15px; margin:10px 0; border:1px dashed #f39c12;">Loading Details...</div>
+                <button class="submit-btn" onclick="processWithdrawal()">SUBMIT REQUEST</button>
+                <button class="submit-btn" style="background:#475569; color:white; margin-top:10px;" onclick="switchTab('profile')">Update Payment Details</button>
+            </div>
+
+            <div id="sec-hist" class="card hidden"><div id="user-history-list"></div></div>
+
+            <div id="sec-profile" class="card hidden">
+                <h3>Save Payment Details</h3>
+                <select id="save-method-type" onchange="toggleSaveInputs()">
+                    <option value="upi">UPI ID</option>
+                    <option value="bank">Bank Account</option>
+                    <option value="qr">QR Scanner</option>
+                </select>
+                <div id="save-upi-inputs"><input type="text" id="p_upi" placeholder="Enter UPI ID"></div>
+                <div id="save-bank-inputs" class="hidden">
+                    <input type="text" id="p_bname" placeholder="Bank Name">
+                    <input type="text" id="p_acc" placeholder="Account No">
+                    <input type="text" id="p_ifsc" placeholder="IFSC Code">
+                    <input type="text" id="p_hname" placeholder="Holder Name">
+                </div>
+                <div id="save-qr-inputs" class="hidden">
+                    <div style="border: 2px dashed #f39c12; padding: 15px; text-align: center; position: relative; border-radius:18px; margin-top:10px;">
+                        <span id="qr-label">Click to Upload QR</span>
+                        <input type="file" style="position:absolute; width:100%; height:100%; top:0; left:0; opacity:0;" onchange="uploadUserQR(this)">
+                    </div>
+                </div>
+                <button class="submit-btn" onclick="savePersonalDetails()">SAVE DETAILS</button>
+            </div>`;
+        
+        setTimeout(() => {
+    syncData();
+}, 500); // 0.5 second ka wait taaki dashboard load ho jaye
+loadHistory(); 
+loadWithdrawDetails();
+    }
+
+    window.fastUpload = async (input) => {
+        if(!input.files[0]) return;
+        document.getElementById('file-label').innerText = "Uploading...";
+        autoUploadedUrl = await AppConfig.uploadScreenshot(input.files[0]);
+        document.getElementById('file-label').innerText = "CLICK ON SUBMIT ⬇️";
+    };
+
+    window.uploadUserQR = async (input) => {
+        if(!input.files[0]) return;
+        document.getElementById('qr-label').innerText = "Uploading...";
+        userQRUrl = await AppConfig.uploadScreenshot(input.files[0]);
+        document.getElementById('qr-label').innerText = "QR Added";
+    };
+
+    window.switchTab = (t) => {
+        ['depo', 'with', 'hist', 'profile'].forEach(s => {
+            document.getElementById('sec-' + s)?.classList.add('hidden');
+            document.getElementById('btn-' + s)?.classList.remove('active');
+        });
+        document.getElementById('sec-' + t)?.classList.remove('hidden');
+        document.getElementById('btn-' + t)?.classList.add('active');
+    };
+
+    window.toggleSaveInputs = () => {
+        const v = document.getElementById('save-method-type').value;
+        document.getElementById('save-upi-inputs').classList.toggle('hidden', v !== 'upi');
+        document.getElementById('save-bank-inputs').classList.toggle('hidden', v !== 'bank');
+        document.getElementById('save-qr-inputs').classList.toggle('hidden', v !== 'qr');
+    };
+
+    window.savePersonalDetails = async () => {
+        const type = document.getElementById('save-method-type').value;
+        let data = { method: type };
+        if(type === 'upi') data.upiId = document.getElementById('p_upi').value;
+        else if(type === 'qr') data.qrUrl = userQRUrl;else { 
+    data.bankName = document.getElementById('p_bname').value;
+    data.holderName = document.getElementById('p_hname').value; // Ye line missing thi
+    data.acc = document.getElementById('p_acc').value;
+    data.ifsc = document.getElementById('p_ifsc').value;
+}
+        await db.ref(`user_details/${currentUser}`).set(data);
+        alert("Details Saved!"); switchTab('with');
+    };
+
+    window.processDeposit = async () => {
+        if(hasPendingRequest) return alert("REQUEST ALREADY PENDING");
+        const amt = document.getElementById('d_amt').value;
+        if(!amt || amt < 100 || !autoUploadedUrl) return alert("Fill details & Screenshot!");
+        await db.ref('requests').push({ idName: currentUser, type: 'Deposit', amount: amt, paymentProof: autoUploadedUrl, status: 'Pending', time: new Date().toLocaleString() });
+        AppConfig.sendTelegram(`🆕 <b>DEPOSIT</b>\n👤 User: ${currentUser}\n💰 Amt: ₹${amt}`);
+        alert("Success!"); switchTab('hist');
+    };
+
+    window.processWithdrawal = async () => {
+        if(hasPendingRequest) return alert("Aapki ek request pehle se Pending hai!");
+        const amt = document.getElementById('w_amt').value;
+        if(!amt || amt < 100) return alert("Min ₹100");
+        const snap = await db.ref(`user_details/${currentUser}`).once('value');
+        if(!snap.exists()) return alert("Save Payment Details First!");
+        await db.ref('requests').push({ idName: currentUser, type: 'Withdrawal', amount: amt, withdrawInfo: snap.val(), status: 'Pending', time: new Date().toLocaleString() });
+        AppConfig.sendTelegram(`⚠️ <b>WITHDRAW REQUEST</b>\n\n👤 User: ${currentUser}\n👤 Holder: ${snap.val().holderName || 'N/A'}\n🏦 Bank: ${snap.val().bankName || 'N/A'}\n💳 A/C: ${snap.val().acc || 'N/A'}\n📍 IFSC: ${snap.val().ifsc || 'N/A'}\n💰 Amt: ₹${amt}`);
+
+    alert("Success!"); 
+    switchTab('hist');
+};
+    function loadHistory() {
+        db.ref('requests').orderByChild('idName').equalTo(currentUser).on('value', snap => {
+            let h = "";
+            hasPendingRequest = false;
+            snap.forEach(c => {
+                const v = c.val(); const k = c.key;
+                if(v.status === 'Pending') hasPendingRequest = true;
+                let proof = v.paymentProof ? `<img src="${v.paymentProof}" style="width:100px; border-radius:8px; margin-top:5px;">` : "";
+                let replyArea = "";
+                if(v.status === 'Rejected') {
+                    if(!v.userReply) {
+                        replyArea = `<div style="margin-top:10px; border-left:3px solid #ef4444; padding-left:10px;">
+                            <small>Reason: ${v.rejectReason || 'Check'}</small>
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <input type="text" id="rep-${k}" placeholder="Reply..." style="padding:8px; flex:1; margin:0; border-radius:10px;">
+                                <button onclick="sendReply('${k}')" style="background:#ef4444; border:none; color:white; padding:0 15px; border-radius:10px;">Reply</button>
+                            </div>
+                        </div>`;
+                    } else {
+                        replyArea = `<div style="margin-top:10px; background:rgba(243,156,18,0.1); padding:10px; border-radius:10px; border-left:3px solid #f39c12;">
+                            <small>Reason: ${v.rejectReason}</small><br>
+                            <small style="color:#f39c12;">Your Reply: ${v.userReply}</small>
+                        </div>`;
+                    }
+                }
+                h = `<div style="border-bottom:1px solid #2d3748;padding:20px 0;"><span class="status-badge status-${v.status}">${v.status}</span><b>₹${v.amount}</b> (${v.type})<br><small>${v.time}</small>${proof}${replyArea}</div>` + h;
+            });
+            document.getElementById('user-history-list').innerHTML = h || "No records.";
+        });
+    }
+
+    window.sendReply = async (key) => {
+        const r = document.getElementById(`rep-${key}`).value;
+        if(!r) return;
+        await db.ref(`requests/${key}`).update({ userReply: r });
+        AppConfig.sendTelegram(`💬 <b>REPLY</b>\n👤 ${currentUser}\n📝 ${r}`);
+        alert("Sent!");
+    };
+
+    function loadWithdrawDetails() {
+        db.ref(`user_details/${currentUser}`).on('value', snap => {
+            const box = document.getElementById('saved-details-box');
+            if(!box) return;
+            const d = snap.val();
+            if(!d) { box.innerHTML = "No details saved."; return; }
+            if(d.method === 'upi') box.innerHTML = `<b>UPI:</b> ${d.upiId}`;
+            else if(d.method === 'qr') box.innerHTML = `<b>QR:</b> <img src="${d.qrUrl}" style="width:60px; border-radius:5px; vertical-align:middle;">`;
+            else box.innerHTML = `<b>HOLDER:</b> ${d.holderName || '--'}<br><b>BANK:</b> ${d.bankName || '--'}<br><b>ACC:</b> ${d.acc}<br><b>IFSC:</b> ${d.ifsc}`;
+            
+        });
+    }
+
+                function syncData() {
+        db.ref('settings').on('value', snap => {
+            const s = snap.val() || {};
+            
+            // BASIC UI UPDATES
+           document.getElementById('notif-text').innerText = s.announcement || "Welcome!";
+            document.getElementById('ui-app-name').innerText = s.app_config?.appName || "cricwin";
+            document.getElementById('wa-link').href = `https://api.whatsapp.com/send?phone=${s.app_config?.supportNum}`;
+
+            let html = "";
+            let methodCount = 1; // Counter shuru karein
+
+            // 1. UPI Methods Loop
+            if (s.payment_methods?.upis) {
+                s.payment_methods.upis.forEach(u => {
+                    html += `<div style="text-align:center; margin-bottom:25px; border-bottom: 1px dashed rgba(243,156,18,0.3); padding-bottom:15px;">
+                        <div style="color:#f39c12; font-size:12px; font-weight:bold; margin-bottom:10px;">--- Payment Method ${methodCount++} ---</div>
+                        <img src="${u.qr}" style="width:160px; background:white; padding:10px; border-radius:20px;">
+                        <div style="display:flex; gap:10px; justify-content:center; margin-top:10px;">
+                            <button class="copy-btn" onclick="copyVal('${u.id}')">COPY UPI: ${u.id}</button>
+                            <button class="copy-btn" style="background:#22c55e; color:white;" onclick="downloadQR('${u.qr}', 'QR_${u.id}.png')">DOWNLOAD QR</button>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            // 2. Bank Methods Loop
+            if (s.payment_methods?.banks) {
+                s.payment_methods.banks.forEach(b => {
+                    html += `<div style="margin-bottom:25px;">
+                        <div style="color:#f39c12; font-size:12px; font-weight:bold; margin-bottom:10px; text-align:center;">--- Payment Method ${methodCount++} ---</div>
+                        <div class="bank-card">
+                            <div class="bank-title">🏛️ ${b.name}</div>
+                            <div class="bank-row"><span>HOLDER: ${b.holder || '--'}</span><button class="copy-btn" onclick="copyVal('${b.holder}')">Copy</button></div>
+                            <div class="bank-row"><span>ACC: ${b.acc}</span><button class="copy-btn" onclick="copyVal('${b.acc}')">Copy</button></div>
+                            <div class="bank-row"><span>IFSC: ${b.ifsc}</span><button class="copy-btn" onclick="copyVal('${b.ifsc}')">Copy</button></div>
+                        </div>
+                    </div>`;
+                });
+            }
+            const depoArea = document.getElementById('depo-display-area');
+            if (depoArea) {
+                depoArea.innerHTML = html || "Updating...";
+            }
+        });
+    }
+
+    // Download Function
+    window.downloadQR = async (url, fileName) => {
+        try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = fileName;
+            a.click();
+        } catch (e) { window.open(url, '_blank'); }
+    };
+    
+    syncData();
+    render();
+</script>
+</body>
+</html>

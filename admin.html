@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Dynamic Control</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+    <script src="Config.js"></script>
+
+    <style>
+        body { background: #0f172a; color: white; font-family: sans-serif; padding: 15px; }
+        #admin-auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999;
+        }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 20px; }
+        h2 { color: #38bdf8; font-size: 18px; margin-bottom: 15px; text-align: center; border-bottom: 1px solid #334155; padding-bottom: 10px; }
+        h3 { color: #fbbf24; font-size: 14px; margin: 15px 0 10px 0; border-left: 3px solid #fbbf24; padding-left: 10px; }
+        input, select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; background: #0f172a; border: 1px solid #475569; color: white; border-radius: 8px; outline: none; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 14px; }
+        .btn-blue { background: #38bdf8; color: #0f172a; }
+        .btn-green { background: #22c55e; color: white; }
+        .btn-red { background: #ef4444 !important; color: white !important; font-size: 11px; padding: 8px; margin-top: 5px; width: 100%; }
+        .btn-danger { background: #b91c1c; color: white; margin-top: 20px; border: 2px solid #ef4444; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .table-wrap { overflow-x: auto; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; background: #111827; }
+        th, td { border: 1px solid #334155; padding: 12px; text-align: left; font-size: 12px; vertical-align: top; }
+        .qr-preview { width: 100px; height: 100px; border: 1px solid #38bdf8; margin: 5px 0; background: #fff; object-fit: contain; display: block; }
+        .qr-preview:not([src]), .qr-preview[src=""] { display: none; }
+        .file-label { display: block; background: #334155; padding: 8px; border: 1px dashed #38bdf8; border-radius: 5px; cursor: pointer; text-align: center; font-size: 11px; margin-bottom: 5px; }
+        .qr-thumb { width: 50px; height: 50px; cursor: pointer; border: 1px solid #334155; border-radius: 4px; object-fit: cover; }
+        .status-Success { color: #22c55e; font-weight: bold; }
+        .status-Pending { color: #fbbf24; font-weight: bold; }
+        .status-Rejected { color: #ef4444; font-weight: bold; }
+        .details-box { font-size: 11px; line-height: 2; color: #94a3b8; background: #0f172a; padding: 8px; border-radius: 8px; }
+        .details-box b { color: #fbbf24; }
+        .copy-small { background: #38bdf8; color: #000; border: none; padding: 2px 6px; font-size: 9px; border-radius: 4px; margin-left: 5px; width: auto; display: inline-block; cursor: pointer; font-weight: 900; }
+        .hidden { display: none !important; }
+        .reject-reason-text { font-size: 9px; color: #f87171; display: block; margin-top: 4px; border-top: 1px solid #450a0a; padding-top: 2px; }
+        .reply-box { background: #0ea5e9; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-top: 5px; display: inline-block; }
+        .btn-upload-proof { background: #8b5cf6; color: white; font-size: 10px; padding: 5px; margin-top: 5px; width: 100%; border-radius: 5px; cursor: pointer; display: block; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div id="admin-auth-overlay">
+        <div class="card" style="width: 300px; text-align: center;">
+            <h2 style="color: #fbbf24;">🔐 Admin Access</h2>
+            <input type="password" id="admin-pass-input" placeholder="Enter Master Password">
+            <button class="btn-green" onclick="checkAdminAccess()">UNLOCK PANEL</button>
+            <p id="error-msg" style="color: #ef4444; font-size: 12px; margin-top: 10px; display: none;">Wrong Password! Access Denied.</p>
+        </div>
+    </div>
+
+    <div id="main-admin-content" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <span style="color: #38bdf8; font-weight: bold;">ADMIN ACTIVE</span>
+            <button onclick="adminLogout()" style="width: auto; background: #ef4444; padding: 5px 15px;">LOGOUT</button>
+        </div>
+
+        <div class="card" style="border: 1px solid #38bdf8;">
+            <h2 style="color: #38bdf8;">⚙️ App & Support Setup</h2>
+            <div class="grid-2">
+                <div>
+                    <h3>App Branding</h3>
+                    <input type="text" id="setup-app-name" placeholder="App Name">
+                </div>
+                <div>
+                    <h3>WhatsApp Support</h3>
+                    <input type="text" id="setup-wa-num" placeholder="Number (Ex: 919988776655)">
+                    <input type="text" id="setup-wa-msg" placeholder="Default Message">
+                </div>
+            </div>
+            <div class="grid-2" style="margin-top:10px;">
+                <div>
+                    <h3>Telegram Bot</h3>
+                    <input type="text" id="setup-bot-token" placeholder="Bot Token">
+                    <input type="text" id="setup-chat-id" placeholder="Chat ID">
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <button class="btn-blue" onclick="saveAppConfig()">SAVE ALL CONFIG</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>🔔 Alerts</h2>
+            <input type="file" id="notif-sound-file" accept="audio/*" onchange="loadCustomSound(this)">
+            <div class="grid-2">
+                <button class="btn-blue" onclick="playTestSound()">Test Sound</button>
+                <button class="btn-red" onclick="stopSound()" style="background:#475569 !important;">Stop Sound</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="color: #fbbf24;">📢 Announcement</h2>
+            <textarea id="admin-msg" rows="2" placeholder="User panel message..."></textarea>
+            <button class="btn-blue" onclick="updateNews()">UPDATE NEWS</button>
+        </div>
+
+        <div class="card">
+            <h2 style="color: #fbbf24;">💳 Payment Methods (Dynamic)</h2>
+            <h3>UPI / QR Codes</h3>
+            <div id="upi-container"></div>
+            <button class="btn-blue" onclick="addUPIRow()" style="margin-bottom:20px;">+ Add More UPI/QR</button>
+            <h3>Bank Accounts</h3>
+            <div id="bank-container"></div>
+            <button class="btn-blue" onclick="addBankRow()">+ Add More Bank</button>
+            <button onclick="savePaymentMethods()" class="btn-green" style="margin-top:20px; font-size:18px;">SAVE ALL PAYMENTS</button>
+        </div>
+
+        <div class="card">
+            <h2>User PINs</h2>
+            <div class="grid-2"><input type="text" id="sid" placeholder="User ID"><input type="text" id="spin" placeholder="PIN"></div>
+            <button class="btn-blue" onclick="savePin()">Save PIN</button>
+            <div class="table-wrap"><table><thead><tr><th>User</th><th>PIN/Password</th><th>Status</th></tr></thead><tbody id="pin-list"></tbody></table></div>
+        </div>
+
+        <div class="card">
+            <h2>Request Logs</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th><th>User</th><th>Type/Amt</th><th>Proof</th><th>Details</th><th>Status</th><th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card" style="border: 2px solid #ef4444; background: #450a0a;">
+            <h2 style="color: #f87171;">⚠️ Danger Zone</h2>
+            <button class="btn-danger" onclick="masterSystemReset()">DELETE ALL SYSTEM DATA</button>
+        </div>
+    </div>
+
+<script>
+    if (!firebase.apps.length) { firebase.initializeApp(AppConfig.firebaseConfig); }
+    const db = firebase.database();
+    const MASTER_KEY = "utKSPkH3FzAA5J@"; 
+    const RESET_KEY = "[{(Ykjghhch+&)}]"; 
+    
+    let adminAudio = new Audio();
+    adminAudio.loop = true;
+    let lastRequestCount = 0;
+
+    // --- FIX: ISME KOI FEATURE MISS NAHI HOGA ---
+    window.onload = function() {
+        if(localStorage.getItem('admin_session') === MASTER_KEY) {
+            showAdminPanel();
+        }
+    };
+
+    function checkAdminAccess() {
+        let pass = document.getElementById('admin-pass-input').value.trim();
+        if(pass === MASTER_KEY) {
+            localStorage.setItem('admin_session', MASTER_KEY);
+            showAdminPanel();
+        } else { 
+            document.getElementById('error-msg').style.display = "block"; 
+        }
+    }
+
+    function showAdminPanel() {
+        document.getElementById('admin-auth-overlay').classList.add('hidden');
+        document.getElementById('main-admin-content').classList.remove('hidden');
+        loadAllData();
+    }
+
+    function adminLogout() {
+        localStorage.removeItem('admin_session');
+        location.reload();
+    }
+    // --- END LOGIN FIX ---
+
+    async function safePlay() {
+        if (adminAudio.src) {
+            try { await adminAudio.play(); } catch (err) {}
+        }
+    }
+
+    function loadCustomSound(input) { 
+        if (input.files[0]) { 
+            adminAudio.src = URL.createObjectURL(input.files[0]); 
+            alert("Custom sound loaded!");
+        } 
+    }
+
+    function playTestSound() { safePlay(); }
+    function stopSound() { 
+        if (!adminAudio.paused) {
+            adminAudio.pause(); 
+            adminAudio.currentTime = 0; 
+        }
+    }
+
+    function addUPIRow(id = '', qr = '') {
+        const div = document.createElement('div');
+        div.className = 'card upi-item';
+        div.innerHTML = `
+            <input type="text" placeholder="UPI ID" class="upi-id-val" value="${id}">
+            <label class="file-label"><input type="file" onchange="uploadQR(this)" style="display:none;">Change QR</label>
+            <img class="qr-preview" src="${qr}" style="display:${qr ? 'block' : 'none'}">
+            <button class="btn-red" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        document.getElementById('upi-container').appendChild(div);
+    }
+
+    function addBankRow(name='', acc='', ifsc='', holder='') {
+        const div = document.createElement('div');
+        div.className = 'card bank-item';
+        div.innerHTML = `
+            <input type="text" placeholder="Bank Name" class="b-name" value="${name}">
+            <input type="text" placeholder="A/C No" class="b-acc" value="${acc}">
+            <input type="text" placeholder="IFSC" class="b-ifsc" value="${ifsc}">
+            <input type="text" placeholder="Holder Name" class="b-hold" value="${holder}">
+            <button class="btn-red" onclick="this.parentElement.remove()">Remove</button>
+        `;
+        document.getElementById('bank-container').appendChild(div);
+    }
+
+    async function uploadQR(input) {
+        if (input.files[0]) {
+            const file = input.files[0];
+            const img = input.parentElement.nextElementSibling;
+            const reader = new FileReader();
+            reader.onload = (e) => { img.src = e.target.result; img.style.display = "block"; };
+            reader.readAsDataURL(file);
+            try {
+                const url = await AppConfig.uploadScreenshot(file);
+                img.src = url; 
+                alert("QR Uploaded!");
+            } catch(e) { alert("Upload failed"); }
+        }
+    }
+
+    function savePaymentMethods() {
+        const upis = [];
+        document.querySelectorAll('.upi-item').forEach(el => {
+            const idVal = el.querySelector('.upi-id-val').value;
+            const qrVal = el.querySelector('.qr-preview').src;
+            if(idVal) upis.push({ id: idVal, qr: qrVal });
+        });
+        const banks = [];
+        document.querySelectorAll('.bank-item').forEach(el => {
+            const name = el.querySelector('.b-name').value;
+            if(name) {
+                banks.push({
+                    name: name, acc: el.querySelector('.b-acc').value,
+                    ifsc: el.querySelector('.b-ifsc').value, holder: el.querySelector('.b-hold').value
+                });
+            }
+        });
+        db.ref('settings/payment_methods').set({ upis, banks }).then(() => alert("All Payments Saved!"));
+    }
+
+    function loadAllData() {
+        db.ref('settings').on('value', snap => {
+            const s = snap.val() || {};
+            if(s.announcement) document.getElementById('admin-msg').value = s.announcement;
+            if(s.app_config) {
+                document.getElementById('setup-app-name').value = s.app_config.appName || "";
+                document.getElementById('setup-bot-token').value = s.app_config.botToken || "";
+                document.getElementById('setup-chat-id').value = s.app_config.chatId || "";
+                document.getElementById('setup-wa-num').value = s.app_config.supportNum || "";
+                document.getElementById('setup-wa-msg').value = s.app_config.supportMsg || "";
+            }
+            if(s.payment_methods) {
+                document.getElementById('upi-container').innerHTML = '';
+                document.getElementById('bank-container').innerHTML = '';
+                if(s.payment_methods.upis) s.payment_methods.upis.forEach(u => addUPIRow(u.id, u.qr));
+                if(s.payment_methods.banks) s.payment_methods.banks.forEach(b => addBankRow(b.name, b.acc, b.ifsc, b.holder));
+            }
+        });
+
+        db.ref('requests').on('value', snap => {
+            const data = snap.val() || {};
+            const keys = Object.keys(data);
+            if(keys.length > lastRequestCount) {
+                const lastKey = keys[keys.length-1];
+                const last = data[lastKey];
+                if(last && last.status === 'Pending') { safePlay(); }
+            }
+            lastRequestCount = keys.length;
+
+            document.getElementById('logs').innerHTML = keys.slice().reverse().map(k => {
+                const r = data[k];
+                let proofHTML = r.paymentProof ? `<img src="${r.paymentProof}" class="qr-thumb" onclick="window.open(this.src)">` : "No Proof";
+
+                let detailHTML = "";
+                if (r.type === 'Withdrawal' && r.withdrawInfo) {
+                    const wi = r.withdrawInfo;
+                    if (wi.method === 'upi') {
+                        detailHTML = `<div class="details-box"><b>UPI:</b> ${wi.upiId} <button class="copy-small" onclick="navigator.clipboard.writeText('${wi.upiId}'); alert('Copied!')">Copy</button></div>`;
+                    } else if (wi.method === 'qr') {
+                        detailHTML = `<div class="details-box"><b>QR Scanner:</b><br><img src="${wi.qrUrl}" style="width:70px; border-radius:8px; cursor:pointer;" onclick="window.open('${wi.qrUrl}')"></div>`;
+                    } else if (wi.method === 'bank') {
+                        detailHTML = `<div class="details-box"><b>Holder:</b> ${wi.holderName || 'N/A'}<br><b>Bank:</b> ${wi.bankName || 'N/A'}<br><b>A/C:</b> ${wi.acc}<br><b>IFSC:</b> ${wi.ifsc}</div>`;
+                    }
+                } else { detailHTML = `<span style="color:#64748b;">Deposit Request</span>`; }
+
+                let reasonDisplay = (r.status === 'Rejected' && r.rejectReason) ? `<span class="reject-reason-text">Why: ${r.rejectReason}</span>` : "";
+                let userReplyDisplay = r.userReply ? `<br><span class="reply-box">User Reply: ${r.userReply}</span>` : "";
+                let uploadProofBtn = r.type === 'Withdrawal' ? `<label class="btn-upload-proof">Upload Payment Proof<input type="file" style="display:none;" onchange="uploadWithdrawProof(this, '${k}')"></label>` : "";
+                
+                return `<tr><td>${r.time}</td><td><b>${r.idName}</b></td><td>${r.type}<br>₹${r.amount}</td><td>${proofHTML}</td><td>${detailHTML}${userReplyDisplay}</td><td class="status-${r.status}">${r.status}${reasonDisplay}</td><td><button class="btn-green" onclick="updateStatus('${k}','Success')">Approve</button><button class="btn-red" onclick="rejectRequest('${k}')">Reject</button>${uploadProofBtn}</td></tr>`;
+            }).join('');
+        });
+
+                db.ref('settings/pins').on('value', snap => {
+            const pins = snap.val() || {};
+            document.getElementById('pin-list').innerHTML = Object.keys(pins).map(id => {
+                const p = pins[id];
+                const pass = (typeof p === 'object') ? p.password : p;
+                const status = (p.isNew) ? '<span style="color:#fbbf24;">New</span>' : '<span style="color:#22c55e;">Changed</span>';
+                
+                // Naya Return logic jisme Reset Button hai
+                return `<tr>
+                    <td>${id}</td>
+                    <td>${pass}</td>
+                    <td>${status} <br> 
+                        <button class="copy-small" style="background:#ef4444; color:white; margin-top:5px; padding: 2px 8px; font-size: 10px;" onclick="resetSpecificUser('${id}')">RESET PIN</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        });
+    }
+
+    async function uploadWithdrawProof(input, key) {
+        if (input.files[0]) {
+            const btn = input.parentElement; btn.innerText = "Processing...";
+            try {
+                const url = await AppConfig.uploadScreenshot(input.files[0]);
+                await db.ref('requests/' + key).update({ paymentProof: url, status: 'Success' });
+                stopSound(); alert("Approved with Proof!");
+            } catch(e) { alert("Failed!"); btn.innerText = "Upload Proof"; }
+        }
+    }
+
+    function updateStatus(k, v) { db.ref('requests/'+k).update({ status: v }); stopSound(); }
+    function rejectRequest(k) { let m = prompt("Reason:"); if(m) { db.ref('requests/'+k).update({status: 'Rejected', rejectReason: m }); stopSound(); } }
+    function updateNews() { db.ref('settings/announcement').set(document.getElementById('admin-msg').value).then(() => alert("Updated!")); }
+    
+        function savePin() {
+        // .toLowerCase() se ID hamesha small letters mein save hogi
+        const id = document.getElementById('sid').value.trim().toLowerCase(); 
+        const pin = document.getElementById('spin').value.trim();
+        
+        if(!id || !pin) return alert("Details bharein!");
+        
+        db.ref('settings/pins/' + id).set({ 
+            password: pin, 
+            isNew: true 
+        }).then(() => alert("Saved Successfully!"));
+    }
+
+    function saveAppConfig() {
+        const config = { 
+            appName: document.getElementById('setup-app-name').value, 
+            botToken: document.getElementById('setup-bot-token').value, 
+            chatId: document.getElementById('setup-chat-id').value, 
+            supportNum: document.getElementById('setup-wa-num').value, 
+            supportMsg: document.getElementById('setup-wa-msg').value 
+        };
+        db.ref('settings/app_config').set(config).then(() => alert("Config Saved!"));
+    }
+    function masterSystemReset() { if(prompt("Type ERASE") === "ERASE" && prompt("Key") === RESET_KEY) db.ref('/').remove().then(() => location.reload()); }
+        function resetSpecificUser(userId) {
+        const defaultPin = "Abcd@12345";
+if(confirm(`Kya aap User [${userId}] ka PIN reset karke '${defaultPin}' karna chahte hain?`)) {
+            db.ref('settings/pins/' + userId).update({ 
+                password: defaultPin, 
+                isNew: true 
+            }).then(() => {
+                alert(`User ${userId} ka PIN reset ho gaya!`);
+            });
+        }
+    }
+</script>
+</body>
+</html>
