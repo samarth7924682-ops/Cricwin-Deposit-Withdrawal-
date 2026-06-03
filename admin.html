@@ -7,7 +7,6 @@
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
-    <script src="Config.js"></script>
 
     <style>
         body { background: #0f172a; color: white; font-family: sans-serif; padding: 15px; }
@@ -141,6 +140,42 @@
     </div>
 
 <script>
+    // --- Global Configuration Variable Integrated Directly ---
+    const AppConfig = {
+        appName: "Cricwin Online Book",
+        telegram: { botToken: "", chatId: "" },
+        cloudinary: { cloudName: "dcbnhbnoi", uploadPreset: "my_preset" },
+        firebaseConfig: {
+            apiKey: "AIzaSyCZ_70ZUSYbxrv-KR2g2X9vhaEN", 
+            authDomain: "my-payment-site-dd7d2.firebaseapp.com",
+            databaseURL: "https://my-payment-site-dd7d2-default-rtdb.firebaseio.com",
+            projectId: "my-payment-site-dd7d2",
+            storageBucket: "my-payment-site-dd7d2.firebasestorage.app",
+            messagingSenderId: "355379135558",
+            appId: "1:355379135558:web:cd28f441a3f03e",
+            measurementId: "G-0Z6XDTY7K2"
+        },
+        uploadScreenshot: async function(file) {
+            if (!file) throw new Error("No file selected");
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', this.cloudinary.uploadPreset);
+            
+            try {
+                const response = await fetch(`https://api.cloudinary.com/v1_1/${this.cloudinary.cloudName}/image/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                return data.secure_url;
+            } catch (error) {
+                console.error("Cloudinary Error:", error);
+                throw error;
+            }
+        }
+    };
+
+    // Firebase Initialization Sequence
     if (!firebase.apps.length) { firebase.initializeApp(AppConfig.firebaseConfig); }
     const db = firebase.database();
     const MASTER_KEY = "utKSPkH3FzAA5J@"; 
@@ -150,7 +185,6 @@
     adminAudio.loop = true;
     let lastRequestCount = 0;
 
-    // --- FIX: ISME KOI FEATURE MISS NAHI HOGA ---
     window.onload = function() {
         if(localStorage.getItem('admin_session') === MASTER_KEY) {
             showAdminPanel();
@@ -177,7 +211,6 @@
         localStorage.removeItem('admin_session');
         location.reload();
     }
-    // --- END LOGIN FIX ---
 
     async function safePlay() {
         if (adminAudio.src) {
@@ -312,15 +345,13 @@
                 return `<tr><td>${r.time}</td><td><b>${r.idName}</b></td><td>${r.type}<br>₹${r.amount}</td><td>${proofHTML}</td><td>${detailHTML}${userReplyDisplay}</td><td class="status-${r.status}">${r.status}${reasonDisplay}</td><td><button class="btn-green" onclick="updateStatus('${k}','Success')">Approve</button><button class="btn-red" onclick="rejectRequest('${k}')">Reject</button>${uploadProofBtn}</td></tr>`;
             }).join('');
         });
-
-                db.ref('settings/pins').on('value', snap => {
+        db.ref('settings/pins').on('value', snap => {
             const pins = snap.val() || {};
             document.getElementById('pin-list').innerHTML = Object.keys(pins).map(id => {
                 const p = pins[id];
                 const pass = (typeof p === 'object') ? p.password : p;
                 const status = (p.isNew) ? '<span style="color:#fbbf24;">New</span>' : '<span style="color:#22c55e;">Changed</span>';
                 
-                // Naya Return logic jisme Reset Button hai
                 return `<tr>
                     <td>${id}</td>
                     <td>${pass}</td>
@@ -347,8 +378,7 @@
     function rejectRequest(k) { let m = prompt("Reason:"); if(m) { db.ref('requests/'+k).update({status: 'Rejected', rejectReason: m }); stopSound(); } }
     function updateNews() { db.ref('settings/announcement').set(document.getElementById('admin-msg').value).then(() => alert("Updated!")); }
     
-        function savePin() {
-        // .toLowerCase() se ID hamesha small letters mein save hogi
+    function savePin() {
         const id = document.getElementById('sid').value.trim().toLowerCase(); 
         const pin = document.getElementById('spin').value.trim();
         
@@ -370,10 +400,12 @@
         };
         db.ref('settings/app_config').set(config).then(() => alert("Config Saved!"));
     }
+    
     function masterSystemReset() { if(prompt("Type ERASE") === "ERASE" && prompt("Key") === RESET_KEY) db.ref('/').remove().then(() => location.reload()); }
-        function resetSpecificUser(userId) {
+    
+    function resetSpecificUser(userId) {
         const defaultPin = "Abcd@12345";
-if(confirm(`Kya aap User [${userId}] ka PIN reset karke '${defaultPin}' karna chahte hain?`)) {
+        if(confirm(`Kya aap User [${userId}] ka PIN reset karke '${defaultPin}' karna chahte hain?`)) {
             db.ref('settings/pins/' + userId).update({ 
                 password: defaultPin, 
                 isNew: true 

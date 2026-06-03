@@ -7,8 +7,6 @@
     
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
-    
-    <script src="Config.js"></script>
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Arial Black', sans-serif; }
@@ -68,39 +66,95 @@
     <div id="app"></div>
 
 <script>
+    // --- Global Configuration Variable Integrated Directly ---
+    const AppConfig = {
+        appName: "Cricwin Online Book",
+        telegram: { botToken: "", chatId: "" },
+        cloudinary: { cloudName: "dcbnhbnoi", uploadPreset: "my_preset" },
+        firebaseConfig: {
+            apiKey: "AIzaSyCZ_70ZUSYbxrv-KR2g2X9vhaEN", 
+            authDomain: "my-payment-site-dd7d2.firebaseapp.com",
+            databaseURL: "https://my-payment-site-dd7d2-default-rtdb.firebaseio.com",
+            projectId: "my-payment-site-dd7d2",
+            storageBucket: "my-payment-site-dd7d2.firebasestorage.app",
+            messagingSenderId: "355379135558",
+            appId: "1:355379135558:web:cd28f441a3f03e",
+            measurementId: "G-0Z6XDTY7K2"
+        },
+        sendTelegram: async function(message) {
+            try {
+                const snapshot = await firebase.database().ref('settings/app_config').once('value');
+                const liveData = snapshot.val();
+                const activeToken = (liveData && liveData.botToken) ? liveData.botToken.trim() : "";
+                const activeChatId = (liveData && liveData.chatId) ? liveData.chatId.toString().trim() : "";
+
+                if (!activeToken || !activeChatId) {
+                    console.warn("⚠️ Admin Panel में Bot Token या Chat ID खाली है!");
+                    return;
+                }
+
+                const url = `https://api.telegram.org/bot${activeToken}/sendMessage`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: activeChatId, text: message, parse_mode: 'HTML' })
+                });
+
+                if(response.ok) { console.log("✅ Message sent to New Bot!"); } 
+                else { console.error("❌ TG Error:", await response.text()); }
+            } catch (error) { console.error("❌ Connection Error:", error); }
+        },
+        uploadScreenshot: async function(file) {
+            if (!file) throw new Error("No file selected");
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', this.cloudinary.uploadPreset);
+            
+            try {
+                const response = await fetch(`https://api.cloudinary.com/v1_1/${this.cloudinary.cloudName}/image/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                return data.secure_url;
+            } catch (error) {
+                console.error("Cloudinary Error:", error);
+                throw error;
+            }
+        }
+    };
+
+    // Firebase Initialization Sequence
     if (!firebase.apps.length) { firebase.initializeApp(AppConfig.firebaseConfig); }
     const db = firebase.database();
+    
     let currentUser = localStorage.getItem('logged_user') || null;
     let autoUploadedUrl = null;
     let userQRUrl = null;
     let hasPendingRequest = false;
-if (currentUser) {
-    db.ref('settings/pins/' + currentUser).on('value', snap => {
-        // Agar ID delete ho gayi hai
-        if (!snap.exists()) {
-            alert("Aapki ID delete kar di gayi hai!");
-            window.logout(); // Turant logout kar dega
-            return;
-        }
 
-        const userData = snap.val();
-        // Change #1: Pin ka naam phone ke matching ID 'user_pin' kar diya
-        const savedPin = localStorage.getItem('user_pin'); 
-
-        // Agar PIN badal gaya hai
-        const currentDbPass = (userData.password) ? userData.password : userData;
-        if (savedPin && String(currentDbPass) !== String(savedPin)) {
-            alert("Aapka Password badal gaya hai. Dobara login karein.");
-            window.logout();
-        }
-    });
-}
+    if (currentUser) {
+        db.ref('settings/pins/' + currentUser).on('value', snap => {
+            if (!snap.exists()) {
+                alert("Aapki ID delete kar di gayi hai!");
+                window.logout();
+                return;
+            }
+            const userData = snap.val();
+            const savedPin = localStorage.getItem('user_pin'); 
+            const currentDbPass = (userData.password) ? userData.password : userData;
+            if (savedPin && String(currentDbPass) !== String(savedPin)) {
+                alert("Aapka Password badal gaya hai. Dobara login karein.");
+                window.logout();
+            }
+        });
+    }
 
     window.copyVal = (t) => { navigator.clipboard.writeText(t).then(() => alert("Copied!")); };
 
     window.login = async () => {
-    const id = document.getElementById('l_id').value.trim().toLowerCase(); // Id ko small kar dega
-    const pin = document.getElementById('l_pin').value.trim();
+        const id = document.getElementById('l_id').value.trim().toLowerCase(); 
+        const pin = document.getElementById('l_pin').value.trim();
         if(!id || !pin) return alert("Details bharein!");
         const snap = await db.ref(`settings/pins/${id}`).once('value');
         if(snap.exists()) {
@@ -206,18 +260,16 @@ if (currentUser) {
                 </div>
                 <div id="save-qr-inputs" class="hidden">
                     <div style="border: 2px dashed #f39c12; padding: 15px; text-align: center; position: relative; border-radius:18px; margin-top:10px;">
-                        <span id="qr-label">Click to Upload QR</span>
+                         <span id="qr-label">Click to Upload QR</span>
                         <input type="file" style="position:absolute; width:100%; height:100%; top:0; left:0; opacity:0;" onchange="uploadUserQR(this)">
                     </div>
                 </div>
                 <button class="submit-btn" onclick="savePersonalDetails()">SAVE DETAILS</button>
             </div>`;
         
-        setTimeout(() => {
-    syncData();
-}, 500); // 0.5 second ka wait taaki dashboard load ho jaye
-loadHistory(); 
-loadWithdrawDetails();
+        setTimeout(() => { syncData(); }, 500); 
+        loadHistory(); 
+        loadWithdrawDetails();
     }
 
     window.fastUpload = async (input) => {
@@ -254,12 +306,13 @@ loadWithdrawDetails();
         const type = document.getElementById('save-method-type').value;
         let data = { method: type };
         if(type === 'upi') data.upiId = document.getElementById('p_upi').value;
-        else if(type === 'qr') data.qrUrl = userQRUrl;else { 
-    data.bankName = document.getElementById('p_bname').value;
-    data.holderName = document.getElementById('p_hname').value; // Ye line missing thi
-    data.acc = document.getElementById('p_acc').value;
-    data.ifsc = document.getElementById('p_ifsc').value;
-}
+        else if(type === 'qr') data.qrUrl = userQRUrl;
+        else { 
+            data.bankName = document.getElementById('p_bname').value;
+            data.holderName = document.getElementById('p_hname').value; 
+            data.acc = document.getElementById('p_acc').value;
+            data.ifsc = document.getElementById('p_ifsc').value;
+        }
         await db.ref(`user_details/${currentUser}`).set(data);
         alert("Details Saved!"); switchTab('with');
     };
@@ -281,11 +334,12 @@ loadWithdrawDetails();
         if(!snap.exists()) return alert("Save Payment Details First!");
         await db.ref('requests').push({ idName: currentUser, type: 'Withdrawal', amount: amt, withdrawInfo: snap.val(), status: 'Pending', time: new Date().toLocaleString() });
         AppConfig.sendTelegram(`⚠️ <b>WITHDRAW REQUEST</b>\n\n👤 User: ${currentUser}\n👤 Holder: ${snap.val().holderName || 'N/A'}\n🏦 Bank: ${snap.val().bankName || 'N/A'}\n💳 A/C: ${snap.val().acc || 'N/A'}\n📍 IFSC: ${snap.val().ifsc || 'N/A'}\n💰 Amt: ₹${amt}`);
+        alert("Success!"); 
+        switchTab('hist');
+    };
 
-    alert("Success!"); 
-    switchTab('hist');
-};
     function loadHistory() {
+        if(!currentUser) return;
         db.ref('requests').orderByChild('idName').equalTo(currentUser).on('value', snap => {
             let h = "";
             hasPendingRequest = false;
@@ -312,7 +366,8 @@ loadWithdrawDetails();
                 }
                 h = `<div style="border-bottom:1px solid #2d3748;padding:20px 0;"><span class="status-badge status-${v.status}">${v.status}</span><b>₹${v.amount}</b> (${v.type})<br><small>${v.time}</small>${proof}${replyArea}</div>` + h;
             });
-            document.getElementById('user-history-list').innerHTML = h || "No records.";
+            const listContainer = document.getElementById('user-history-list');
+            if(listContainer) { listContainer.innerHTML = h || "No records."; }
         });
     }
 
@@ -325,6 +380,7 @@ loadWithdrawDetails();
     };
 
     function loadWithdrawDetails() {
+        if(!currentUser) return;
         db.ref(`user_details/${currentUser}`).on('value', snap => {
             const box = document.getElementById('saved-details-box');
             if(!box) return;
@@ -333,23 +389,25 @@ loadWithdrawDetails();
             if(d.method === 'upi') box.innerHTML = `<b>UPI:</b> ${d.upiId}`;
             else if(d.method === 'qr') box.innerHTML = `<b>QR:</b> <img src="${d.qrUrl}" style="width:60px; border-radius:5px; vertical-align:middle;">`;
             else box.innerHTML = `<b>HOLDER:</b> ${d.holderName || '--'}<br><b>BANK:</b> ${d.bankName || '--'}<br><b>ACC:</b> ${d.acc}<br><b>IFSC:</b> ${d.ifsc}`;
-            
         });
     }
 
-                function syncData() {
+    function syncData() {
         db.ref('settings').on('value', snap => {
             const s = snap.val() || {};
             
-            // BASIC UI UPDATES
-           document.getElementById('notif-text').innerText = s.announcement || "Welcome!";
-            document.getElementById('ui-app-name').innerText = s.app_config?.appName || "cricwin";
-            document.getElementById('wa-link').href = `https://api.whatsapp.com/send?phone=${s.app_config?.supportNum}`;
+            const notifText = document.getElementById('notif-text');
+            if(notifText) notifText.innerText = s.announcement || "Welcome!";
+            
+            const uiAppName = document.getElementById('ui-app-name');
+            if(uiAppName) uiAppName.innerText = s.app_config?.appName || "cricwin";
+            
+            const waLink = document.getElementById('wa-link');
+            if(waLink) waLink.href = `https://api.whatsapp.com/send?phone=${s.app_config?.supportNum}`;
 
             let html = "";
-            let methodCount = 1; // Counter shuru karein
+            let methodCount = 1; 
 
-            // 1. UPI Methods Loop
             if (s.payment_methods?.upis) {
                 s.payment_methods.upis.forEach(u => {
                     html += `<div style="text-align:center; margin-bottom:25px; border-bottom: 1px dashed rgba(243,156,18,0.3); padding-bottom:15px;">
@@ -363,7 +421,6 @@ loadWithdrawDetails();
                 });
             }
 
-            // 2. Bank Methods Loop
             if (s.payment_methods?.banks) {
                 s.payment_methods.banks.forEach(b => {
                     html += `<div style="margin-bottom:25px;">
@@ -384,7 +441,6 @@ loadWithdrawDetails();
         });
     }
 
-    // Download Function
     window.downloadQR = async (url, fileName) => {
         try {
             const res = await fetch(url);
@@ -396,6 +452,7 @@ loadWithdrawDetails();
         } catch (e) { window.open(url, '_blank'); }
     };
     
+    // Initial Trigger Run
     syncData();
     render();
 </script>
