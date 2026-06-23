@@ -318,7 +318,10 @@
     };
 
     window.processDeposit = async () => {
-        if(hasPendingRequest) return alert("REQUEST ALREADY PENDING");
+        const pendingCheck = await db.ref('requests').orderByChild('idName').equalTo(currentUser).once('value');
+let isPending = false;
+pendingCheck.forEach(c => { if(c.val().status === 'Pending') isPending = true; });
+if(isPending) return alert("REQUEST ALREADY PENDING");
         const amt = document.getElementById('d_amt').value;
         if(!amt || amt < 100 || !autoUploadedUrl) return alert("Fill details & Screenshot!");
         await db.ref('requests').push({ idName: currentUser, type: 'Deposit', amount: amt, paymentProof: autoUploadedUrl, status: 'Pending', time: new Date().toLocaleString() });
@@ -327,7 +330,10 @@
     };
 
     window.processWithdrawal = async () => {
-        if(hasPendingRequest) return alert("Aapki ek request pehle se Pending hai!");
+        const pendingCheck2 = await db.ref('requests').orderByChild('idName').equalTo(currentUser).once('value');
+let isPending2 = false;
+pendingCheck2.forEach(c => { if(c.val().status === 'Pending') isPending2 = true; });
+if(isPending2) return alert("Aapki ek request pehle se Pending hai!");
         const amt = document.getElementById('w_amt').value;
         if(!amt || amt < 100) return alert("Min ₹100");
         const snap = await db.ref(`user_details/${currentUser}`).once('value');
