@@ -1,7 +1,7 @@
 const AppConfig = {
     appName: "Cricwin Online Book",
     
-    // --- Telegram Backup (इसे खाली छोड़ रहे हैं ताकि Admin Panel वाला ही चले) ---
+    // --- Telegram Backup (इसे खाली छोड़ रहे हैं ताकि Admin Panel वाला ही चले) ---
     telegram: {
         botToken: "", 
         chatId: ""    
@@ -28,16 +28,15 @@ const AppConfig = {
     // --- Telegram Notification Function ---
     sendTelegram: async function(message) {
         try {
-            // Admin Panel के 'settings/app_config' पाथ से डेटा उठाना
             const snapshot = await firebase.database().ref('settings/app_config').once('value');
             const liveData = snapshot.val();
 
-            // .trim() लगाया है ताकि स्पेस वाली एरर न आए
             const activeToken = (liveData && liveData.botToken) ? liveData.botToken.trim() : "";
             const activeChatId = (liveData && liveData.chatId) ? liveData.chatId.toString().trim() : "";
 
             if (!activeToken || !activeChatId) {
                 console.warn("⚠️ Admin Panel में Bot Token या Chat ID खाली है!");
+                alert("TG Error: Bot Token ya Chat ID khali hai!");
                 return;
             }
 
@@ -56,10 +55,13 @@ const AppConfig = {
             if(response.ok) {
                 console.log("✅ Message sent to New Bot!");
             } else {
-                console.error("❌ TG Error:", await response.text());
+                const err = await response.text();
+                console.error("❌ TG Error:", err);
+                alert("TG Error: " + err);
             }
         } catch (error) {
             console.error("❌ Connection Error:", error);
+            alert("TG Error: " + error.message);
         }
     },
 
