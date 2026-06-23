@@ -322,7 +322,7 @@
         const amt = document.getElementById('d_amt').value;
         if(!amt || amt < 100 || !autoUploadedUrl) return alert("Fill details & Screenshot!");
         await db.ref('requests').push({ idName: currentUser, type: 'Deposit', amount: amt, paymentProof: autoUploadedUrl, status: 'Pending', time: new Date().toLocaleString() });
-        AppConfig.sendTelegram(`🆕 <b>DEPOSIT</b>\n👤 User: ${currentUser}\n💰 Amt: ₹${amt}`);
+      await AppConfig.sendTelegram(`🆕 <b>DEPOSIT</b>\n👤 User: ${currentUser}\n💰 Amt: ₹${amt}`);
         alert("Success!"); switchTab('hist');
     };
 
@@ -333,7 +333,7 @@
         const snap = await db.ref(`user_details/${currentUser}`).once('value');
         if(!snap.exists()) return alert("Save Payment Details First!");
         await db.ref('requests').push({ idName: currentUser, type: 'Withdrawal', amount: amt, withdrawInfo: snap.val(), status: 'Pending', time: new Date().toLocaleString() });
-        AppConfig.sendTelegram(`⚠️ <b>WITHDRAW REQUEST</b>\n\n👤 User: ${currentUser}\n👤 Holder: ${snap.val().holderName || 'N/A'}\n🏦 Bank: ${snap.val().bankName || 'N/A'}\n💳 A/C: ${snap.val().acc || 'N/A'}\n📍 IFSC: ${snap.val().ifsc || 'N/A'}\n💰 Amt: ₹${amt}`);
+        await AppConfig.sendTelegram(`⚠️ <b>WITHDRAW REQUEST</b>\n\n👤 User: ${currentUser}\n👤 Holder: ${snap.val().holderName || 'N/A'}\n🏦 Bank: ${snap.val().bankName || 'N/A'}\n💳 A/C: ${snap.val().acc || 'N/A'}\n📍 IFSC: ${snap.val().ifsc || 'N/A'}\n💰 Amt: ₹${amt}`);
         alert("Success!"); 
         switchTab('hist');
     };
