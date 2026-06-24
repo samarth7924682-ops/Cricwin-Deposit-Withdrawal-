@@ -272,12 +272,18 @@
         loadWithdrawDetails();
     }
 
-    window.fastUpload = async (input) => {
-        if(!input.files[0]) return;
-        document.getElementById('file-label').innerText = "Uploading...";
+window.fastUpload = async (input) => {
+    if(!input.files[0]) return;
+    document.getElementById('file-label').innerText = "Uploading...";
+    try {
         autoUploadedUrl = await AppConfig.uploadScreenshot(input.files[0]);
         document.getElementById('file-label').innerText = "CLICK ON SUBMIT ⬇️";
-    };
+    } catch(e) {
+        autoUploadedUrl = null;
+        document.getElementById('file-label').innerText = "Upload Failed! Try Again";
+        alert("Screenshot upload failed: " + e.message);
+    }
+};
 
     window.uploadUserQR = async (input) => {
         if(!input.files[0]) return;
@@ -323,9 +329,9 @@ let isPending = false;
 pendingCheck.forEach(c => { if(c.val().status === 'Pending') isPending = true; });
 if(isPending) return alert("REQUEST ALREADY PENDING");
         const amt = document.getElementById('d_amt').value;
-        if(!amt || amt < 100) return alert("Fill details & Screenshot!");
+        if(!amt || amt < 100 || !autoUploadedUrl) return alert("Fill details & Screenshot!");
         await db.ref('requests').push({ idName: currentUser, type: 'Deposit', amount: amt, paymentProof: autoUploadedUrl, status: 'Pending', time: new Date().toLocaleString() });
-     alert("Sending TG...");
+    
       await AppConfig.sendTelegram(`🆕 <b>DEPOSIT</b>\n👤 User: ${currentUser}\n💰 Amt: ₹${amt}`);
         alert("Success!"); switchTab('hist');
     };
